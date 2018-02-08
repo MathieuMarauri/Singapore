@@ -13,6 +13,7 @@ library('gdata') # read xls files
 library('data.table') # dataset manipulation
 library('stringi') # string manipulation
 library('zoo') # fill na values with last non na
+library('rvest') # import table from wikipedia
 
 
 # Import data -----------------------------------------------------------------------
@@ -29,6 +30,16 @@ info <- read.xls(xls = 'data/demographic/raw/t143-147.xls', sheet = 1)
 
 # clean session
 rm(info)
+
+# From wikipedia --------------------------------------------------------------------
+
+# Import population density by area from Wikipedia
+
+population <- 'https://en.wikipedia.org/wiki/Planning_Areas_of_Singapore' %>%
+  read_html() %>%
+  html_nodes('.wikitable.sortable') %>%
+  html_table() %>% 
+  .[[1]]
 
 
 # Age -------------------------------------------------------------------------------
