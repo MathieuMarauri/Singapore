@@ -11,6 +11,9 @@
 
 # Public transport:
 
+# bus route and stops: 
+# https://github.com/cheeaun/busrouter-sg
+
 # Average daily number of trips made islandwide on MRT, LRT, bus & taxi.
 # https://data.gov.sg/dataset/public-transport-utilisation-average-public-transport-ridership
 
