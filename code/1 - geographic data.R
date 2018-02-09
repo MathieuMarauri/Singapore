@@ -12,6 +12,7 @@ library('rgeos') # simplify spatial polygons
 library('ggplot2') # plot maps
 library('osmdata') # extracting spatial data
 library('dplyr') # sf/dataframe manipulation
+library('sf') # make sf class sticky to dplyr
 library('rjson') # read json files
 library('xml2') # read xml files
 
@@ -65,11 +66,41 @@ query <- add_osm_feature(opq = query,
                          key_exact = FALSE,
                          value_exact = FALSE,
                          match_case = FALSE)
-streets <- osmdata_sp(q = query)
+streets <- osmdata_sf(q = query)
 streets <- streets$osm_lines
+
+# select informative columns to then filter data
 streets <- streets %>% 
-  filter(addr.country == 'Singapore') %>% 
-  select(osm_id, geometry)
+  select(osm_id, addr.city, highway, railway, geometry)
+
+# filter out some streets 
+streets <- streets %>% 
+  filter(addr.city != 'Johor Bahru' | is.na(addr.city)) %>% 
+  filter(railway != 'abandoned' | is.na(railway)) %>% 
+  filter(!highway %in% c('footway', 'path', 'bridleway'))
+
+# coerce sf to data frame for the plot
+geometry <- st_geometry(streets)
+streets_df <- lapply(X = 1:nrow(streets), 
+                     FUN = function(i) cbind(id = streets$osm_id[i], geometry[[i]])) 
+streets_df <- do.call(rbind, streets_df) %>% 
+  as.data.frame() %>% 
+  setNames(c('id', 'long', 'lat'))
+
+# coerce to spatialpoints to use over function
+streets_sp <- SpatialPointsDataFrame(coords = streets_df[, c(2,3)], 
+                                     data = streets_df,
+                                     proj4string = CRS("+proj=longlat +datum=WGS84"),
+                                     match.ID = FALSE)
+
+overlay <- over(streets_sp, as(area, 'Spatial'))
+
+
+# map
+ggplot(data = area_df, mapping = aes(x = long, y = lat, group = group)) + 
+  geom_polygon(colour = 'black', fill = 'white') + 
+  geom_line(data = streets_df, mapping = aes(x = long, y = lat, group = id),
+            colour = 'gray40')
 
 
 # Bus lanes -------------------------------------------------------------------------
