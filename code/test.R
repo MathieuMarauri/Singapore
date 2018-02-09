@@ -36,20 +36,7 @@ query <- add_osm_feature(opq = query,
 streets_sf <- osmdata_sf(q = query)
 streets_sf <- streets_sf$osm_lines
 
-# coerce sf lines to spatialPoints to use over function 
-# streets_points_sp <- st_geometry(streets_sf)
-# streets_points_sp <- lapply(X = 1:nrow(streets_sf), 
-#                      FUN = function(i) cbind(id = streets_sf$osm_id[i], streets_points_sp[[i]])) 
-# streets_points_sp <- do.call(rbind, streets_points_sp) %>% 
-#   as.data.frame() %>% 
-#   setNames(c('id', 'long', 'lat'))
-# coordinates(streets_points_sp) <- ~ long + lat
-# proj4string(streets_points_sp) <- proj4string(singapore_sp)
-# streets_points_sf <- st_as_sf(streets_points_sp)
-
 # which streets are contained in the Singapore boundaries
-contained <- st_intersects(x = streets_points_sf, y = singapore_sf)
-
 contained_2 <- st_covers(x = singapore_sf, y = streets_sf)
 
 streets_sf <- streets_sf[contained_2[[1]], ] 
