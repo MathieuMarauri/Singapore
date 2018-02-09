@@ -13,8 +13,16 @@ library('ggplot2') # plot maps
 library('osmdata') # extracting spatial data
 library('dplyr') # sf/dataframe manipulation
 library('sf') # make sf class sticky to dplyr
+library('sp') # change coordinates projection
 library('rjson') # read json files
 library('xml2') # read xml files
+
+
+# Singapore boundary ----------------------------------------------------------------
+
+# import data
+singapore <- readRDS('data/geography/raw/SGP_adm0.rds')
+singapore <- fortify(singapore, region = 'ISO')
 
 
 # Singapore areas -------------------------------------------------------------------

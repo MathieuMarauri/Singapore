@@ -1,13 +1,3 @@
-pts = st_sfc(st_point(c(.5,.5)), st_point(c(1.5, 1.5)), st_point(c(2.5, 2.5)))
-pol = st_polygon(list(rbind(c(0,0), c(2,0), c(2,2), c(0,2), c(0,0))))
-(lst = st_intersects(pts, pol))
-(mat = st_intersects(pts, pol, sparse = FALSE))
-# which points fall inside a polygon?
-apply(mat, 1, any)
-lengths(lst) > 0
-# which points fall inside the first polygon?
-st_intersects(pol, pts)[[1]]
-
 
 # import singapore boundaries from shape file from gadm
 singapore_sp <- readRDS('data/geography/raw/SGP_adm0.rds')
