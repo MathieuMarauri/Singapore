@@ -8,35 +8,81 @@ singapore_sf <- st_as_sf(singapore_sp)
 # coerce back to sp
 singapore_sp <- as(singapore_sf, 'Spatial')
 
-# singapore bounding box
-singapore_bbox <- matrix(c(103.604201, 
-                           1.182086, 
-                           104.089178, 
-                           1.477715), nrow = 2)
 
-# get the streets inside bbox from osm
-query <- opq(bbox = singapore_bbox)
-query <- add_osm_feature(opq = query, 
-                         key = 'highway',
-                         key_exact = FALSE,
-                         value_exact = FALSE,
-                         match_case = FALSE)
+# Complete bus routes ---------------------------------------------------------------
 
-# create sf object and keeps lines
-streets_sf <- osmdata_sf(q = query)
-streets_sf <- streets_sf$osm_lines
+# Complete bus routes as data retrieved consists in points only. Osm used to get the
+# shortest path between two consecutive points of the same bus route.
 
-# which streets are contained in the Singapore boundaries
-contained_2 <- st_covers(x = singapore_sf, y = streets_sf)
+# import bus data
+bus_routes <- readRDS("data/geography/clean/bus.rds")
 
-streets_sf <- streets_sf[contained_2[[1]], ] 
-streets_sp <- as(streets_sf, 'Spatial')
-streets_df <- fortify(streets_sp, region = 'osm_id')
+library('osrm') # get shortest path 
 
-singapore_df <- fortify(singapore_sp, region = 'ISO')
-ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) + 
-  geom_polygon(colour = 'black', fill = 'white') + 
-  geom_line(data = streets_df, mapping = aes(x = long, y = lat, group = id),
-            colour = 'gray40')
+bus <- unique(bus_routes$bus)
+result <- vector(mode = 'list', length = length(bus))
+names(result) <- bus
+for (i in 1:length(bus)) {
+  bus_route <- bus_routes[bus == bus[i]]
+  nrow_bus <- nrow(bus_route)
+  for (j in 1:(nrow_bus - 1)) {
+    tryCatch(expr = {
+      route <- osrmRoute(src = as.numeric(bus_route[j, .(id, long, lat)]),
+                         dst = as.numeric(bus_route[j + 1, .(id, long, lat)]),
+                         sp = TRUE)
+      route <- st_as_sf(route)
+      route <- route %>% 
+        mutate(src = bus_route[j]$id,
+               dst = bus_route[j + 1]$id)
+      if (exists("shortest_path")) {
+        shortest_path <- rbind(shortest_path, route)
+      } else {
+        shortest_path <- route
+      }
+      cat(j, ' - ', sep = '')
+    }, error = function(message) {
+      cat('Error')
+    })
+  }
+  shortest_path <- shortest_path %>% 
+    mutate(bus = i)
+  result[[i]] <- shortest_path
+  rm(shortest_path)
+  Sys.sleep(5)
+  cat('\n', bus[i], '(', i, '/', length(bus), '): ', sep = '')
+}
+
+saveRDS(result, 'data/geography/clean/bus_complete.rds')
 
 
+# Read xml --------------------------------------------------------------------------
+
+
+# BUs travel time
+library('xml2') # read xml files
+# Data from https://www.mytransport.sg/content/mytransport/home/dataMall.html
+
+# import data
+travel_time <- read_xml(x = "data/geography/raw/EstTravelTimes.xml")
+
+# parse data
+name <- travel_time %>% 
+  xml_find_all('//m:properties/d:Name') %>% 
+  xml_text() %>% 
+  tolower()
+startpoint <- travel_time %>% 
+  xml_find_all('//m:properties/d:StartPoint') %>% 
+  xml_text() %>% 
+  tolower()
+endpoint <- travel_time %>% 
+  xml_find_all('//m:properties/d:EndPoint') %>% 
+  xml_text() %>% 
+  tolower()
+time <- travel_time %>% 
+  xml_find_all('//m:properties/d:EstTime') %>% 
+  xml_text() %>% 
+  as.numeric()
+
+travel_time <- data.table(name = name, startpoint = startpoint, endpoint = endpoint, 
+                          time = time)
+# data is useless
