@@ -1,28 +1,29 @@
 
-# Geographical data is retrieved. Shapes for singapore area, streets, bus and rail lines
+# Geographical data is retrieved. Shapes for singapore areas, streets, bus and rail lines
 # and stops. 
 
-# Outputs: singapore map
+# Inputs: shape files from different sources.
 
 # Packages --------------------------------------------------------------------------
 
 library('data.table') # dataset manipulation
+library('sf') # sf class sticky to dplyr
+library('sp') # change coordinates projection
 library('rgdal') # read shape files
 library('rgeos') # simplify spatial polygons
 library('ggplot2') # plot maps
 library('osmdata') # extracting spatial data
 library('dplyr') # sf/dataframe manipulation
-library('sf') # make sf class sticky to dplyr
-library('sp') # change coordinates projection
 library('rjson') # read json files
-library('xml2') # read xml files
 
 
 # Singapore boundary ----------------------------------------------------------------
 
+# Base singapore boundary from global administrative areas. 
+
 # import data
 singapore <- readRDS('data/geography/raw/SGP_adm0.rds')
-singapore <- fortify(singapore, region = 'ISO')
+singapore_df <- fortify(singapore, region = 'ISO')
 
 
 # Singapore areas -------------------------------------------------------------------
@@ -35,7 +36,7 @@ area <- readOGR(dsn = "data/geography/raw/singapore_areas")
 # transform coordinates system to regular decimal degrees
 area <- spTransform(area, CRS("+proj=longlat +datum=WGS84"))
 
-# simplify to avoid the topology exception
+# simplify to avoid the topology exception created with the new projection
 area <- gSimplify(area, tol = 0.00001)
 
 # plot
@@ -43,23 +44,15 @@ area_df <- fortify(area, region = 'OBJECTID')
 ggplot(data = area_df, mapping = aes(x = long, y = lat, group = group)) + 
   geom_polygon(colour = 'white', fill = 'gray20')
 
-# clean session
-rm(area)
+# save result and clean session
+saveRDS(area_df, 'data/geography/clean/area.rds')
+rm(area, area_df)
 
 
 # Streets ---------------------------------------------------------------------------
 
-# Data from: http://www.mapcruzin.com/free-singapore-country-city-place-gis-shapefiles.htm
-
-# read shape file
-streets <- readOGR(dsn = "data/geography/raw/singapore_highway")
-
-# plot
-streets_df <- fortify(streets, region = 'NAME')
-ggplot(data = area_df, mapping = aes(x = long, y = lat, group = group)) + 
-  geom_polygon(colour = 'black', fill = 'white') + 
-  geom_line(data = streets_df, mapping = aes(x = long, y = lat, group = group), 
-            colour = 'gray40')
+# Data from osm. Get the streets shape in filter out streets not inside the singapore
+# boudaries.
 
 # singapore bounding box
 singapore_bbox <- matrix(c(103.604201, 
@@ -67,48 +60,34 @@ singapore_bbox <- matrix(c(103.604201,
                            104.089178, 
                            1.477715), nrow = 2)
 
-# get the streets shape
+# get the streets inside bbox from osm
 query <- opq(bbox = singapore_bbox)
 query <- add_osm_feature(opq = query, 
                          key = 'highway',
                          key_exact = FALSE,
                          value_exact = FALSE,
                          match_case = FALSE)
-streets <- osmdata_sf(q = query)
-streets <- streets$osm_lines
 
-# select informative columns to then filter data
-streets <- streets %>% 
-  select(osm_id, addr.city, highway, railway, geometry)
+# create sf object and keeps lines
+streets_sf <- osmdata_sf(q = query)
+streets_sf <- streets_sf$osm_lines
 
-# filter out some streets 
-streets <- streets %>% 
-  filter(addr.city != 'Johor Bahru' | is.na(addr.city)) %>% 
-  filter(railway != 'abandoned' | is.na(railway)) %>% 
-  filter(!highway %in% c('footway', 'path', 'bridleway'))
+# which streets are contained in the Singapore boundaries
+contained <- st_covers(x = st_as_sf(singapore), y = streets_sf)
 
-# coerce sf to data frame for the plot
-geometry <- st_geometry(streets)
-streets_df <- lapply(X = 1:nrow(streets), 
-                     FUN = function(i) cbind(id = streets$osm_id[i], geometry[[i]])) 
-streets_df <- do.call(rbind, streets_df) %>% 
-  as.data.frame() %>% 
-  setNames(c('id', 'long', 'lat'))
+streets_sf <- streets_sf[contained[[1]], ] 
+streets_sp <- as(streets_sf, 'Spatial')
+streets_df <- fortify(streets_sp, region = 'osm_id')
 
-# coerce to spatialpoints to use over function
-streets_sp <- SpatialPointsDataFrame(coords = streets_df[, c(2,3)], 
-                                     data = streets_df,
-                                     proj4string = CRS("+proj=longlat +datum=WGS84"),
-                                     match.ID = FALSE)
-
-overlay <- over(streets_sp, as(area, 'Spatial'))
-
-
-# map
-ggplot(data = area_df, mapping = aes(x = long, y = lat, group = group)) + 
+# plot 
+ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) + 
   geom_polygon(colour = 'black', fill = 'white') + 
   geom_line(data = streets_df, mapping = aes(x = long, y = lat, group = id),
             colour = 'gray40')
+
+# save results and clean session
+saveRDS(streets_df, 'data/geography/clean/streets.rds')
+rm(streets_df, streets_sf, streets_sp, contained, query, singapore_bbox, singapore)
 
 
 # Bus lanes -------------------------------------------------------------------------
@@ -150,42 +129,23 @@ bus_route <- lapply(X = seq(length(bus_files)),
 bus_route <- bus_route[!sapply(bus_route, is.character)]
 
 # bind all tables
-bus_routes <- rbindlist(bus_route)
+bus_route <- rbindlist(bus_route)
 
 # plot on Singapore map
-ggplot(data = area_df, mapping = aes(x = long, y = lat, group = group)) + 
+ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) + 
   geom_polygon(colour = 'white', fill = 'gray20') + 
   geom_point(data = bus_routes, mapping = aes(x = long, y = lat, group = id, color = bus),
              show.legend = FALSE)
 
+# save resuts and clean session
+saveRDS(bus_route, 'data/geography/clean/bus.rds')
+rm(bus_route, bus_files, bus_names, busRoute)
+
 
 # Bus travel times ------------------------------------------------------------------
 
-# Data from https://www.mytransport.sg/content/mytransport/home/dataMall.html
+# Using osm to get the travel time (and shortest route) between two points from the bus
+# route. Complete bus route and get the travel time between stops.
 
-# import data
-travel_time <- read_xml(x = "data/geography/raw/EstTravelTimes.xml")
-
-# parse data
-name <- travel_time %>% 
-  xml_find_all('//m:properties/d:Name') %>% 
-  xml_text() %>% 
-  tolower()
-startpoint <- travel_time %>% 
-  xml_find_all('//m:properties/d:StartPoint') %>% 
-  xml_text() %>% 
-  tolower()
-endpoint <- travel_time %>% 
-  xml_find_all('//m:properties/d:EndPoint') %>% 
-  xml_text() %>% 
-  tolower()
-time <- travel_time %>% 
-  xml_find_all('//m:properties/d:EstTime') %>% 
-  xml_text() %>% 
-  as.numeric()
-
-travel_time <- data.table(name = name, startpoint = startpoint, endpoint = endpoint, 
-                          time = time)
-# data is useless
-
-# Using osm to get the data 
+# clean session
+rm(singapore_df)
