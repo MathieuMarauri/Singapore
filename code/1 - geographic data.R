@@ -49,6 +49,29 @@ saveRDS(area_df, 'data/geography/clean/area.rds')
 rm(area, area_df)
 
 
+# Singapore subzones -------------------------------------------------------------------
+
+# Data from: https://data.gov.sg/dataset/master-plan-2014-subzone-boundary-no-sea
+
+# read shape file
+subzone <- readOGR(dsn = "data/geography/raw/singapore_subzones")
+
+# transform coordinates system to regular decimal degrees
+subzone <- spTransform(subzone, CRS("+proj=longlat +datum=WGS84"))
+
+# simplify to avoid the topology exception created with the new projection
+subzone <- gSimplify(subzone, tol = 0.00001)
+subzone_df <- fortify(subzone, region = 'OBJECTID')
+
+# plot
+ggplot(data = subzone_df, mapping = aes(x = long, y = lat, group = group)) + 
+  geom_polygon(colour = 'white', fill = 'gray20')
+
+# save result and clean session
+saveRDS(subzone_df, 'data/geography/clean/subzone.rds')
+rm(subzone, subzone_df)
+
+
 # Streets ---------------------------------------------------------------------------
 
 # Data from osm. Get the streets shape in filter out streets not inside the singapore
@@ -140,6 +163,28 @@ ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) +
 # save resuts and clean session
 saveRDS(bus_route, 'data/geography/clean/bus.rds')
 rm(bus_route, bus_files, bus_names, busRoute)
+
+
+# Bicycle rack ----------------------------------------------------------------------
+
+# Data from https://www.mytransport.sg/content/mytransport/home/dataMall.html
+
+# read shape file
+cycle <- st_read("data/geography/raw/bicyclerack.kml")
+
+# coerce to sp 
+cycle <- as(cycle, 'Spatial')
+cycle <- data.frame(cycle)
+
+# plot on singapore map
+ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) + 
+  geom_polygon(colour = 'black', fill = 'white') + 
+  geom_point(data = cycle, mapping = aes(x = coords.x1, y = coords.x2, group = Name),
+            colour = 'dodgerblue4')
+
+# save results and clean session
+saveRDS(cycle, 'data/geography/clean/cycle.rds')
+rm(cycle)
 
 
 # Bus travel times ------------------------------------------------------------------
