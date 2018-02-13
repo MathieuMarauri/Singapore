@@ -8,6 +8,8 @@ library('sf') # sf class
 library('rgdal') # read shape files
 library('ggplot2') # plot maps
 library('dplyr') # combine demographic and geogrpahic data
+library('rmapzen') # get isochrone data
+library('leaflet') # dynamic maps
 
 
 # Base map --------------------------------------------------------------------------
@@ -23,6 +25,9 @@ singapore <- fortify(singapore, region = 'ISO')
     geom_polygon() + 
     coord_equal() + 
   theme_void())
+
+# clean session
+rm(singapore)
 
 
 # Subzone population ----------------------------------------------------------------
@@ -64,6 +69,9 @@ setorderv(x = subzone_df, cols = c('group', 'order'))
     coord_equal() + 
     theme_void())
 
+# clean session
+rm(subzone_df, subzone_pop, subzone, subzone_data)
+
 
 # Streets ---------------------------------------------------------------------------
 
@@ -77,6 +85,8 @@ streets <- readRDS("data/geography/clean/streets.rds")
     geom_line(data = streets, mapping = aes(x = long, y = lat, group = group),
               colour = 'gray20', size = 0.1))
 
+# clean session
+rm(streets)
 
 # Bus lines -------------------------------------------------------------------------
 
@@ -89,4 +99,65 @@ bus_routes <- readRDS("data/geography/clean/bus.rds")
 (map <- map + 
     geom_point(data = bus_routes, mapping = aes(x = long, y = lat, group = bus),
               colour = 'maroon4', size = 0.1))
-  
+
+# clean session
+rm(bus_routes)
+
+
+# Isochrone -------------------------------------------------------------------------
+
+# Get isochrone data and plot it on dynamic maps.
+
+# get the isochrone for each station
+station1 <- mz_location(lat = 1.299597, lon = 103.8396382)
+station1 <- mz_isochrone(
+  locations = station1,
+  costing_model = mz_costing$pedestrian(),
+  contours = mz_contours(c(5, 10, 15)),
+  polygons = TRUE
+)
+
+station2 <- mz_location(lat = 1.300094, lon = 103.853883)
+station2 <- mz_isochrone(
+  locations = station2,
+  costing_model = mz_costing$pedestrian(),
+  contours = mz_contours(c(5, 10, 15)),
+  polygons = TRUE
+)
+
+station3 <- mz_location(lat = 1.309508, lon = 103.853166)
+station3 <- mz_isochrone(
+  locations = station3,
+  costing_model = mz_costing$pedestrian(),
+  contours = mz_contours(c(5, 10, 15)),
+  polygons = TRUE
+)
+
+station4 <- mz_location(lat = 1.293097, lon = 103.841369)
+station4 <- mz_isochrone(
+  locations = station4,
+  costing_model = mz_costing$pedestrian(),
+  contours = mz_contours(c(5, 10, 15)),
+  polygons = TRUE
+)
+
+# plot the map
+leaflet(data = as_sp(station1)) %>%
+  addProviderTiles("CartoDB.DarkMatter") %>%
+  addPolygons(data = as_sp(station1), color = ~color, weight = 1) %>%
+  addPolygons(data = as_sp(station2), color = ~color, weight = 1) %>% 
+  addPolygons(data = as_sp(station3), color = ~color, weight = 1) %>%  
+  addPolygons(data = as_sp(station4), color = ~color, weight = 1) %>% 
+  addMarkers(lng = 103.8396382, lat = 1.299597, popup = "Rochor Road Station") %>% 
+  addMarkers(lng = 103.853883, lat = 1.300094, popup = "Queen Street Station") %>% 
+  addMarkers(lng = 103.853166, lat = 1.309508, popup = "Race Course Station") %>% 
+  addMarkers(lng = 103.841369, lat = 1.293097, popup = "Mohamed Sultan Station") %>% 
+  addLegend(colors = ~color, 
+            labels = ~paste(contour, "minutes"),
+            title = "Walking time from <br/> blueSG stations") %>% 
+  addScaleBar(position = 'bottomleft')
+
+# save results and clean session
+saveRDS(list(station1, station2, station3, station4), 'data/geography/clean/isochrone.rds')
+rm(station1, station2, station3, station4)
+
