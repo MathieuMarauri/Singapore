@@ -57,7 +57,6 @@ saveRDS(result, 'data/geography/clean/bus_complete.rds')
 
 # Read xml --------------------------------------------------------------------------
 
-
 # BUs travel time
 library('xml2') # read xml files
 # Data from https://www.mytransport.sg/content/mytransport/home/dataMall.html
