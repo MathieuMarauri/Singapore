@@ -7,7 +7,7 @@
 # Packages --------------------------------------------------------------------------
 
 library('data.table') # dataset manipulation
-library('sf') # sf class sticky to dplyr
+library('sf') # sf class sticky to dplyr and read kml file
 library('sp') # change coordinates projection
 library('rgdal') # read shape files
 library('rgeos') # simplify spatial polygons
@@ -23,7 +23,7 @@ library('rjson') # read json files
 
 # import data
 singapore <- readRDS('data/geography/raw/SGP_adm0.rds')
-singapore_df <- fortify(singapore, region = 'ISO')
+singapore <- fortify(singapore, region = 'ISO')
 
 
 # Singapore areas -------------------------------------------------------------------
@@ -103,7 +103,7 @@ streets_sp <- as(streets_sf, 'Spatial')
 streets_df <- fortify(streets_sp, region = 'osm_id')
 
 # plot 
-ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) + 
+ggplot(data = singapore, mapping = aes(x = long, y = lat, group = group)) + 
   geom_polygon(colour = 'black', fill = 'white') + 
   geom_line(data = streets_df, mapping = aes(x = long, y = lat, group = id),
             colour = 'gray40')
@@ -155,7 +155,7 @@ bus_route <- bus_route[!sapply(bus_route, is.character)]
 bus_route <- rbindlist(bus_route)
 
 # plot on Singapore map
-ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) + 
+ggplot(data = singapore, mapping = aes(x = long, y = lat, group = group)) + 
   geom_polygon(colour = 'white', fill = 'gray20') + 
   geom_point(data = bus_routes, mapping = aes(x = long, y = lat, group = id, color = bus),
              show.legend = FALSE)
@@ -177,7 +177,7 @@ cycle <- as(cycle, 'Spatial')
 cycle <- data.frame(cycle)
 
 # plot on singapore map
-ggplot(data = singapore_df, mapping = aes(x = long, y = lat, group = group)) + 
+ggplot(data = singapore, mapping = aes(x = long, y = lat, group = group)) + 
   geom_polygon(colour = 'black', fill = 'white') + 
   geom_point(data = cycle, mapping = aes(x = coords.x1, y = coords.x2, group = Name),
             colour = 'dodgerblue4')
@@ -187,10 +187,61 @@ saveRDS(cycle, 'data/geography/clean/cycle.rds')
 rm(cycle)
 
 
-# Bus travel times ------------------------------------------------------------------
+# Train routes ----------------------------------------------------------------------
 
-# Using osm to get the travel time (and shortest route) between two points from the bus
-# route. Complete bus route and get the travel time between stops.
+# Data from https://data.gov.sg/dataset/master-plan-2014-rail-line
+
+# import data
+train <- readOGR(dsn = 'data/geography/raw/singapore_train/routes')
+
+# transform coordinates system to regular decimal degrees
+train <- spTransform(train, CRS("+proj=longlat +datum=WGS84"))
+train_data <- train@data
+
+# simplify to avoid the topology exception created with the new projection
+train <- gSimplify(train, tol = 0.00001)
+train <- SpatialLinesDataFrame(train, data = train_data, match.ID = FALSE)
+
+# coerce to data frame for plotting
+train <- fortify(train)
+
+# plot on singapore map
+ggplot(data = singapore, mapping = aes(x = long, y = lat, group = group)) + 
+  geom_polygon(colour = 'black', fill = 'white') + 
+  geom_path(data = train, mapping = aes(x = long, y = lat, group = group),
+             colour = 'dodgerblue4')
+
+# save results and clean session
+saveRDS(train, 'data/geography/clean/train.rds')
+rm(train, train_data)
+
+
+# Train stations ----------------------------------------------------------------------
+
+# Data from https://data.gov.sg/dataset/master-plan-2014-rail-station
+
+# import data
+train_station <- readOGR(dsn = 'data/geography/raw/singapore_train/stations')
+
+# transform coordinates system to regular decimal degrees
+train_station <- spTransform(train_station, CRS("+proj=longlat +datum=WGS84"))
+
+# simplify to avoid the topology exception created with the new projection
+train_station <- gSimplify(train_station, tol = 0.00001)
+
+# coerce to data frame for plotting
+train_station <- fortify(train_station)
+
+# plot on singapore map
+ggplot(data = singapore, mapping = aes(x = long, y = lat, group = group)) + 
+  geom_polygon(colour = 'black', fill = 'white') + 
+  geom_point(data = train_station, mapping = aes(x = long, y = lat, group = group),
+            colour = 'dodgerblue4')
+
+# save results and clean session
+saveRDS(train_station, 'data/geography/clean/train_station.rds')
+rm(train_station)
+
 
 # clean session
-rm(singapore_df)
+rm(singapore)
