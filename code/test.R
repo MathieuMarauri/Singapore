@@ -85,3 +85,10 @@ time <- travel_time %>%
 travel_time <- data.table(name = name, startpoint = startpoint, endpoint = endpoint, 
                           time = time)
 # data is useless
+
+
+
+# Hexagon  --------------------------------------------------------------------------
+
+# https://stackoverflow.com/questions/42893734/create-hexagonal-grid-over-city-and-associate-with-lon-lat-points-in-r
+# https://cran.r-project.org/web/packages/dggridR/vignettes/dggridR.html
